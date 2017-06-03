@@ -11,7 +11,7 @@ import Data.List (intercalate)
 import Data.Semigroup ((<>))
 
 import Minilisp.AST
-       (AST(Application, Atom, Char', Lambda, String'), Atom)
+       (AST(Application, Atom, Char', Lambda, List), Atom)
 import Minilisp.Error
        (Error(Error),
         Type(FunctionNotFound, InvalidArguments, InvalidApplication))
@@ -28,6 +28,7 @@ substitute param arg body =
         then arg
         else body
     Lambda param' body' -> Lambda param' (substitute param arg body')
+    List expressions -> List (map (substitute param arg) expressions)
     _ -> body
 
 eval
@@ -56,4 +57,5 @@ eval expression@(Application fn' args') = do
         throwError $
         Error (InvalidApplication (show fn)) (Just $ show expression)
   eval result
+eval (List expressions) = List <$> traverse eval expressions
 eval expression = return expression

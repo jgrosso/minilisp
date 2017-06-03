@@ -1,11 +1,11 @@
 {-# LANGUAGE InstanceSigs #-}
 
 module Minilisp.AST
-  ( AST(Application, Atom, Char', Int', Lambda, String')
+  ( AST(Application, Atom, Char', Int', Lambda, List)
   , Atom
-  , RawAST(RawAtom, RawChar, RawInt, RawList, RawString)
+  , RawAST(RawAtom, RawChar, RawInt, RawList)
   , SugaredAST(SugaredApplication, SugaredAtom, SugaredChar,
-           SugaredInt, SugaredLambda, SugaredLet, SugaredString)
+           SugaredInt, SugaredLambda, SugaredLet, SugaredList)
   ) where
 
 import Data.List (intercalate)
@@ -18,7 +18,6 @@ data RawAST
   | RawChar Char
   | RawInt Int
   | RawList [RawAST]
-  | RawString String
 
 instance Show RawAST where
   show :: RawAST -> String
@@ -26,8 +25,15 @@ instance Show RawAST where
   show (RawChar char) = "'" <> [char] <> "'"
   show (RawInt int) = show int
   show (RawList expressions) =
-    "(" <> intercalate " " (map show expressions) <> ")"
-  show (RawString string) = "\"" <> string <> "\""
+    case expressions of
+      [RawAtom "quote", RawList items] ->
+        case traverse extractChar items of
+          Just string -> "\"" <> string <> "\""
+          Nothing -> "'(" <> intercalate " " (map show items) <> ")"
+      _ -> "(" <> intercalate " " (map show expressions) <> ")"
+    where
+      extractChar (RawChar char) = Just char
+      extractChar _ = Nothing
 
 data SugaredAST
   = SugaredApplication SugaredAST
@@ -39,7 +45,7 @@ data SugaredAST
                   SugaredAST
   | SugaredLet [(Atom, SugaredAST)]
                SugaredAST
-  | SugaredString String
+  | SugaredList [SugaredAST]
 
 instance Show SugaredAST where
   show :: SugaredAST -> String
@@ -54,7 +60,13 @@ instance Show SugaredAST where
     let showDef (var, val) = "(" <> intercalate " " [var, show val] <> ")"
     in "(let (" <> intercalate " " (map showDef defs) <> ") " <> show body <>
        ")"
-  show (SugaredString string) = "\"" <> string <> "\""
+  show (SugaredList expressions) =
+    case traverse extractChar expressions of
+      Just string -> "\"" <> string <> "\""
+      Nothing -> "'(" <> intercalate " " (map show expressions) <> ")"
+    where
+      extractChar (SugaredChar char) = Just char
+      extractChar _ = Nothing
 
 data AST
   = Application AST
@@ -64,7 +76,7 @@ data AST
   | Int' Int
   | Lambda Atom
            AST
-  | String' String
+  | List [AST]
 
 instance Show AST where
   show :: AST -> String
@@ -74,4 +86,10 @@ instance Show AST where
   show (Char' char) = "'" <> [char] <> "'"
   show (Int' int) = show int
   show (Lambda param body) = show $ Application (Atom "λ") [Atom param, body]
-  show (String' string) = "\"" <> string <> "\""
+  show (List expressions) =
+    case traverse extractChar expressions of
+      Just string -> "\"" <> string <> "\""
+      Nothing -> "'(" <> intercalate " " (map show expressions) <> ")"
+    where
+      extractChar (Char' char) = Just char
+      extractChar _ = Nothing

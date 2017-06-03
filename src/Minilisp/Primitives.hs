@@ -15,7 +15,7 @@ import Data.List (find, intercalate)
 import Data.Semigroup ((<>))
 
 import Minilisp.AST
-       (AST(Int', String'), Atom,
+       (AST(Int', List), Atom,
         SugaredAST(SugaredApplication, SugaredAtom, SugaredLambda,
                    SugaredLet))
 import Minilisp.Error (Error(Error), Type(InvalidArguments))
@@ -56,13 +56,13 @@ primitives = intPrimitives ++ stringPrimitives
           2
           (\args ->
              case args of
-               [String' a, String' b] -> return $ String' (a <> b)
+               [List a, List b] -> return $ List (a <> b)
                _ ->
                  throwError $
                  Error
                    (InvalidArguments
                       "<>"
-                      "two strings"
+                      "two lists"
                       (intercalate ", " $ map show args))
                    Nothing)
       ]

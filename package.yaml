@@ -1,0 +1,52 @@
+name: minilisp
+version: '0.0.0.1'
+category: LISP, Interpreter
+author: Joshua Grosso
+maintainer: jgrosso1@asu.edu
+copyright: 2017 Joshua Grosso
+license: BSD3
+github: jgrosso/minilisp
+extra-source-files:
+- README.md
+library:
+  source-dirs: src
+  exposed-modules:
+  - Minilisp
+  - Minilisp.App
+  - Minilisp.AST
+  - Minilisp.Error
+  - Minilisp.Eval
+  - Minilisp.Mangle
+  - Minilisp.Parse
+  - Minilisp.Primitives
+  - Minilisp.Stages
+  - Minilisp.State
+  - Minilisp.Terminal
+  dependencies:
+  - base >=4.7 && <5
+  - lens
+  - mtl
+  - parsec
+executables:
+  minilisp-exe:
+    main: Main.hs
+    source-dirs: app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - base
+    - minilisp
+    - mtl
+tests:
+  minilisp-test:
+    main: Spec.hs
+    source-dirs: test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - base
+    - minilisp

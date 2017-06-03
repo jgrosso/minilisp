@@ -11,10 +11,10 @@ import Control.Monad.Except (MonadError, throwError)
 import Data.List (intercalate)
 
 import Minilisp.AST
-       (Atom, AST(Application, Atom, Char', Int', Lambda, String'),
-        RawAST(RawAtom, RawChar, RawInt, RawList, RawString),
+       (Atom, AST(Application, Atom, Char', Int', Lambda, List),
+        RawAST(RawAtom, RawChar, RawInt, RawList),
         SugaredAST(SugaredApplication, SugaredAtom, SugaredChar,
-                   SugaredInt, SugaredLambda, SugaredLet, SugaredString))
+                   SugaredInt, SugaredLambda, SugaredLet, SugaredList))
 import Minilisp.Error
        (Error(Error), Type(EmptyList, InvalidArguments))
 
@@ -54,10 +54,11 @@ normalizeAST expression@(RawList list) =
                          (intercalate ", " $ map show rest))
                       (Just $ show expression)
           in SugaredLet <$> traverse getDef defs <*> normalizeAST body
+    [RawAtom "quote", RawList expressions] ->
+      SugaredList <$> traverse normalizeAST expressions
     fn:args ->
       SugaredApplication <$> normalizeAST fn <*> traverse normalizeAST args
     [] -> throwError $ Error EmptyList (Just $ show expression)
-normalizeAST (RawString string) = return $ SugaredString string
 
 desugarAST
   :: (MonadError Error m)
@@ -85,4 +86,4 @@ desugarAST expression@(SugaredLambda params body) =
 desugarAST (SugaredLet defs body) =
   desugarAST $
   SugaredApplication (SugaredLambda (map fst defs) body) (map snd defs)
-desugarAST (SugaredString string) = return $ String' string
+desugarAST (SugaredList expressions) = List <$> traverse desugarAST expressions

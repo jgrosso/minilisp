@@ -11,8 +11,7 @@ import Control.Monad.Except (MonadError, throwError)
 
 import Data.Semigroup ((<>))
 
-import Minilisp.AST
-       (RawAST(RawAtom, RawChar, RawInt, RawList, RawString))
+import Minilisp.AST (RawAST(RawAtom, RawChar, RawInt, RawList))
 import Minilisp.Error (Error(Error), Type(InvalidSyntax))
 
 import Text.Parsec ((<|>), Stream, ParseError, ParsecT, try)
@@ -38,17 +37,10 @@ atom = RawAtom <$> ((:) <$> (letter <|> symbol) <*> many (alphaNum <|> symbol))
   where
     symbol = oneOf "`!@#$%^&*-=~_+`,./<>?"
 
-list
+expression
   :: Stream s m Char
   => ParsecT s u m RawAST
-list = RawList <$> (char '(' *> many1 item <* optional whitespace <* char ')')
-  where
-    item = optional whitespace *> expression
-
-string
-  :: Stream s m Char
-  => ParsecT s u m RawAST
-string = RawString <$> (char '"' *> many1 (noneOf "\"") <* char '"')
+expression = atom <|> char' <|> int' <|> list <|> string
 
 char'
   :: Stream s m Char
@@ -60,10 +52,21 @@ int'
   => ParsecT s u m RawAST
 int' = RawInt <$> read <$> many1 digit
 
-expression
+list
   :: Stream s m Char
   => ParsecT s u m RawAST
-expression = atom <|> char' <|> int' <|> list <|> string
+list = RawList <$> (char '(' *> many1 item <* optional whitespace <* char ')')
+  where
+    item = optional whitespace *> expression
+
+string
+  :: Stream s m Char
+  => ParsecT s u m RawAST
+string = RawList <$> ((RawAtom "quote" :) . (: []) <$> chars)
+  where
+    chars =
+      RawList <$>
+      (map RawChar <$> (char '"' *> many1 (noneOf "\"") <* char '"'))
 
 parse
   :: (MonadError Error m)
