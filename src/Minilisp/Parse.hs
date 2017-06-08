@@ -1,77 +1,99 @@
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 module Minilisp.Parse
-  ( parse
+  ( atom
+  , char'
+  , expression
+  , int
+  , list
+  , many
+  , parse
+  , program
+  , quotedList
+  , sExp
+  , string'
+  , whitespace
   ) where
 
 import Control.Monad.Except (MonadError, throwError)
 
 import Data.Semigroup ((<>))
 
-import Minilisp.AST (RawAST(RawAtom, RawChar, RawInt, RawList))
+import Minilisp.AST
+       (RawAST(RawAtom, RawChar, RawInt, RawList, RawQuotedList))
 import Minilisp.Error (Error(Error), Type(InvalidSyntax))
 
-import Text.Parsec ((<|>), Stream, ParseError, ParsecT, try)
+import Text.Parsec ((<|>), eof, Stream, ParseError, ParsecT, try)
 import qualified Text.Parsec as Parsec (parse)
 import Text.Parsec.Char
-       (alphaNum, char, digit, letter, noneOf, oneOf, space)
-import Text.Parsec.Combinator (many1, option, optional)
-
-many
-  :: Stream s m Char
-  => ParsecT s u m a -> ParsecT s u m [a]
-many = option mempty . many1
+       (alphaNum, char, digit, letter, noneOf, oneOf, space, string)
+import Text.Parsec.Combinator (many1)
+import Text.Parsec.Prim (many)
 
 whitespace
   :: Stream s m Char
   => ParsecT s u m String
 whitespace = many space
 
+sExp
+  :: Stream s m Char
+  => ParsecT s u m [RawAST]
+sExp = char '(' *> many item <* whitespace <* char ')'
+  where
+    item = try (whitespace *> expression) <|> expression
+
 atom
   :: Stream s m Char
   => ParsecT s u m RawAST
 atom = RawAtom <$> ((:) <$> (letter <|> symbol) <*> many (alphaNum <|> symbol))
   where
-    symbol = oneOf "`!@#$%^&*-=~_+`,./<>?"
-
-expression
-  :: Stream s m Char
-  => ParsecT s u m RawAST
-expression = atom <|> char' <|> int' <|> list <|> string
+    symbol = oneOf "`!@#$%^&*-=~_+,./<>?"
 
 char'
   :: Stream s m Char
   => ParsecT s u m RawAST
 char' = RawChar <$> (char '\'' *> noneOf "\'" <* char '\'')
 
-int'
+expression
   :: Stream s m Char
   => ParsecT s u m RawAST
-int' = RawInt <$> read <$> many1 digit
+expression =
+  try atom <|> try char' <|> int <|> list <|> try quotedList <|>
+  string'
+
+int
+  :: Stream s m Char
+  => ParsecT s u m RawAST
+int = RawInt . read <$> many1 digit
 
 list
   :: Stream s m Char
   => ParsecT s u m RawAST
-list = RawList <$> (char '(' *> many1 item <* optional whitespace <* char ')')
-  where
-    item = optional whitespace *> expression
+list = RawList <$> sExp
 
-string
+quotedList
   :: Stream s m Char
   => ParsecT s u m RawAST
-string = RawList <$> ((RawAtom "quote" :) . (: []) <$> chars)
+quotedList = RawQuotedList <$> (char '\'' *> sExp)
+
+string'
+  :: Stream s m Char
+  => ParsecT s u m RawAST
+string' = RawQuotedList <$> chars
   where
-    chars =
-      RawList <$>
-      (map RawChar <$> (char '"' *> many1 (noneOf "\"") <* char '"'))
+    chars = map RawChar <$> (char '"' *> many (noneOf "\"") <* char '"')
+
+program
+  :: Stream s m Char
+  => ParsecT s u m RawAST
+program = expression <* eof
 
 parse
   :: (MonadError Error m)
   => String -> m RawAST
 parse input =
-  case Parsec.parse expression "" input of
+  case Parsec.parse program "" input of
     Right result -> return result
     Left err -> throwError $ Error (InvalidSyntax (show err)) Nothing

@@ -15,11 +15,11 @@ import Data.List (find, intercalate)
 import Data.Semigroup ((<>))
 
 import Minilisp.AST
-       (AST(Int', List), Atom,
+       (AST(Atom, Int', List), Atom,
         SugaredAST(SugaredApplication, SugaredAtom, SugaredLambda,
                    SugaredLet))
 import Minilisp.Error (Error(Error), Type(InvalidArguments))
-import Minilisp.Mangle (mkAtom)
+import Minilisp.Mangle (mkAtom, mkRestricted)
 import Minilisp.State (HasState)
 
 type Arity = Int
@@ -32,8 +32,55 @@ data Primitive m =
 primitives
   :: (MonadError Error m)
   => [Primitive m]
-primitives = intPrimitives ++ stringPrimitives
+primitives =
+  boolPrimitives <> controlPrimitives <> intPrimitives <> listPrimitives
   where
+    boolPrimitives =
+      [ Primitive
+          "="
+          2
+          (\args ->
+             case args of
+               [a, b] ->
+                 if a == b
+                   then return $ Atom "true"
+                   else return $ Atom "false"
+               _ ->
+                 throwError $
+                 Error
+                   (InvalidArguments
+                      "="
+                      "two values"
+                      (intercalate ", " $ map show args))
+                   Nothing)
+      ]
+    controlPrimitives =
+      [ Primitive
+          "if"
+          3
+          (\args ->
+             case args of
+               [Atom cond, true, false] ->
+                 case cond of
+                   "false" -> return false
+                   "true" -> return true
+                   _ ->
+                     throwError $
+                     Error
+                       (InvalidArguments
+                          "if"
+                          "a boolean and two values"
+                          (intercalate ", " $ map show args))
+                       Nothing
+               _ ->
+                 throwError $
+                 Error
+                   (InvalidArguments
+                      "if"
+                      "a boolean and two values"
+                      (intercalate ", " $ map show args))
+                   Nothing)
+      ]
     intPrimitives =
       [ Primitive
           "+"
@@ -49,8 +96,50 @@ primitives = intPrimitives ++ stringPrimitives
                       "two ints"
                       (intercalate ", " $ map show args))
                    Nothing)
+      , Primitive
+          "-"
+          2
+          (\args ->
+             case args of
+               [Int' a, Int' b] -> return $ Int' (a - b)
+               _ ->
+                 throwError $
+                 Error
+                   (InvalidArguments
+                      "-"
+                      "two ints"
+                      (intercalate ", " $ map show args))
+                   Nothing)
+      , Primitive
+          "*"
+          2
+          (\args ->
+             case args of
+               [Int' a, Int' b] -> return $ Int' (a * b)
+               _ ->
+                 throwError $
+                 Error
+                   (InvalidArguments
+                      "*"
+                      "two ints"
+                      (intercalate ", " $ map show args))
+                   Nothing)
+      , Primitive
+          "/"
+          2
+          (\args ->
+             case args of
+               [Int' a, Int' b] -> return $ Int' (a `div` b)
+               _ ->
+                 throwError $
+                 Error
+                   (InvalidArguments
+                      "/"
+                      "two ints"
+                      (intercalate ", " $ map show args))
+                   Nothing)
       ]
-    stringPrimitives =
+    listPrimitives =
       [ Primitive
           "<>"
           2
@@ -67,14 +156,11 @@ primitives = intPrimitives ++ stringPrimitives
                    Nothing)
       ]
 
-mkPrimitiveName :: String -> String
-mkPrimitiveName = ("#" <>)
-
 findPrimitive
   :: (MonadError Error m)
   => Atom -> Maybe (Primitive m)
 findPrimitive name =
-  find (\(Primitive name' _ _) -> name == mkPrimitiveName name') primitives
+  find (\(Primitive name' _ _) -> name == mkRestricted name') primitives
 
 curryPrimitive
   :: (HasState s, MonadError Error m, MonadState s m)
@@ -85,7 +171,7 @@ curryPrimitive (Primitive name arity _) = do
     SugaredLambda
       atoms
       (SugaredApplication
-         (SugaredAtom (mkPrimitiveName name))
+         (SugaredAtom (mkRestricted name))
          (map SugaredAtom atoms))
 
 wrapWithCurriedPrimitives

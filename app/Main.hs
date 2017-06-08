@@ -17,8 +17,6 @@ main = do
     case evalAppM (minilisp input) of
       (result, log) -> do
         case result of
-          Right value -> do
-            print value
-          Left err -> do
-            print err
+          Right value -> print value
+          Left err -> print err
         putStrLn log

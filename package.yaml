@@ -49,4 +49,6 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - base
+    - hedgehog
     - minilisp
+    - parsec

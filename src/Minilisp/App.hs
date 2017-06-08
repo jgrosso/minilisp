@@ -25,6 +25,6 @@ newtype AppM a = AppM
              )
 
 evalAppM :: AppM a -> (Either Error a, String)
-evalAppM = runWriter . runExceptT . (flip evalStateT) initialState . runAppM
+evalAppM = runWriter . runExceptT . flip evalStateT initialState . runAppM
   where
     initialState = State {_parameterName = "abcdefg"}

@@ -2,6 +2,6 @@
 resolver: lts-8.15
 packages:
   - '.'
-extra-deps: []
+extra-deps: [hedgehog-0.2.2]
 flags: {}
 extra-package-dbs: []
