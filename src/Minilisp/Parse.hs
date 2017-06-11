@@ -1,5 +1,4 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 module Minilisp.Parse
@@ -60,8 +59,7 @@ expression
   :: Stream s m Char
   => ParsecT s u m RawAST
 expression =
-  try atom <|> try char' <|> int <|> list <|> try quotedList <|>
-  string'
+  try atom <|> try char' <|> int <|> list <|> try quotedList <|> string'
 
 int
   :: Stream s m Char

@@ -1,3 +1,4 @@
+{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE FlexibleContexts #-}
 
 module Minilisp.Eval
@@ -7,34 +8,57 @@ module Minilisp.Eval
 import Control.Monad.Except (MonadError, throwError)
 import Control.Monad.State (MonadState)
 
-import Data.List (intercalate)
 import Data.Semigroup ((<>))
+
+import Debug.Trace (traceShowId)
 
 import Minilisp.AST
        (AST(Application, Atom, Char', Lambda, List), Atom)
 import Minilisp.Error
        (Error(Error),
         Type(FunctionNotFound, InvalidArguments, InvalidApplication))
+import Minilisp.Mangle (mkAtom)
 import Minilisp.Primitives (findPrimitive, Primitive(Primitive))
 import Minilisp.State (State)
 
 substitute :: Atom -> AST -> AST -> AST
-substitute param arg body =
-  case body of
-    Application fn args ->
-      Application (substitute param arg fn) (map (substitute param arg) args)
+substitute target value expression =
+  case expression of
+    Application fn body -> Application (substitute' fn) (map substitute' body)
     Atom atom ->
-      if atom == param
-        then arg
-        else body
-    Lambda param' body' -> Lambda param' (substitute param arg body')
-    List expressions -> List (map (substitute param arg) expressions)
-    _ -> body
+      if atom == target
+        then value
+        else expression
+    Lambda param body -> Lambda param (substitute' body)
+    List expressions -> List (map substitute' expressions)
+    _ -> expression
+  where
+    substitute' = substitute target value
 
-eval
+inline :: AST -> AST
+inline (Application fn args) =
+  case fn of
+    Lambda param body ->
+      let result = inline $ substitute param arg body
+      in case restArgs of
+           [] -> result
+           _ -> inline $ Application result restArgs
+    _ -> inline $ Application (inline fn) (map inline args)
+  where arg:restArgs = map inline args'
+inline (List expressions) = List (map inline expressions)
+inline expression = expression
+
+eval' :: MonadError Error m => AST -> m AST
+eval' expression@(Application (Atom primitive) args) =
+  case findPrimitive primitive of
+    Just (Primitive _ _ body) -> eval' $ body args
+    _ -> throwError $ Error (FunctionNotFound atom) (Just $ show expressions)
+eval' expression = expression
+
+eval'
   :: (MonadError Error m, MonadState State m)
   => AST -> m AST
-eval expression@(Application fn' args') = do
+eval' expression@(Application fn' args') = do
   fn <- eval fn'
   args <- traverse eval args'
   result <-
@@ -42,20 +66,19 @@ eval expression@(Application fn' args') = do
       Lambda param body ->
         case args of
           arg:restArgs ->
-            let currentResult = substitute param arg body
-            in return $
-               case restArgs of
-                 [] -> currentResult
-                 _ -> Application currentResult restArgs
-          [] -> return body
+            case restArgs of
+              [] -> eval body
+              _ -> eval (Application body restArgs)
       Atom atom ->
         case findPrimitive atom of
           Just (Primitive _ _ body) -> body args
           _ ->
             throwError $ Error (FunctionNotFound atom) (Just $ show expression)
-      _ ->
-        throwError $
-        Error (InvalidApplication (show fn)) (Just $ show expression)
   eval result
-eval (List expressions) = List <$> traverse eval expressions
-eval expression = return expression
+eval' (List expressions) = List <$> traverse eval expressions
+eval' expression = return $ inline expression
+
+eval
+  :: (MonadError Error m, MonadState State m)
+  => AST -> m AST
+eval = eval' . traceShowId . inline

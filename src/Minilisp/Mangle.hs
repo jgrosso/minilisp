@@ -1,5 +1,6 @@
 module Minilisp.Mangle
-  ( mkAtom
+  ( initialMangler
+  , mkAtom
   , mkRestricted
   ) where
 
@@ -12,10 +13,13 @@ import Data.Semigroup ((<>))
 import Minilisp.AST (Atom)
 import Minilisp.State (HasState, parameterName)
 
+initialMangler :: Atom
+initialMangler = "a"
+
 mkAtom
   :: (HasState s, MonadState s m)
   => m String
-mkAtom = mkRestricted <$> (parameterName <<%= fmap incrementChar)
+mkAtom = (mkRestricted . ("_" <>)) <$> (parameterName <<%= fmap incrementChar)
   where
     incrementChar = chr . (+ 1) . ord
 

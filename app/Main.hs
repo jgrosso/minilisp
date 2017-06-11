@@ -4,19 +4,12 @@ module Main
 
 import Control.Monad (forever)
 
-import Minilisp (minilisp)
-import Minilisp.App (evalAppM)
+import Minilisp.Logging (Verbosity(Quiet))
+import Minilisp.Repl
+       (Configuration(Configuration, _verbosity), repl)
 import Minilisp.Terminal as Terminal (configure)
 
 main :: IO ()
 main = do
   Terminal.configure
-  forever $ do
-    putStr "> "
-    input <- getLine
-    case evalAppM (minilisp input) of
-      (result, log) -> do
-        case result of
-          Right value -> print value
-          Left err -> print err
-        putStrLn log
+  repl Configuration {_verbosity = Quiet}

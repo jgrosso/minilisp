@@ -16,11 +16,14 @@ library:
   - Minilisp.AST
   - Minilisp.Error
   - Minilisp.Eval
+  - Minilisp.Logging
   - Minilisp.Mangle
   - Minilisp.Parse
   - Minilisp.Primitives
+  - Minilisp.Repl
   - Minilisp.Stages
   - Minilisp.State
+  - Minilisp.Stdlib
   - Minilisp.Terminal
   dependencies:
   - base >=4.7 && <5

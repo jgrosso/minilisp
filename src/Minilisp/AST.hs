@@ -4,8 +4,8 @@ module Minilisp.AST
   ( AST(Application, Atom, Char', Int', Lambda, List)
   , Atom
   , RawAST(RawAtom, RawChar, RawInt, RawList, RawQuotedList)
-  , SugaredAST(SugaredApplication, SugaredAtom,
-           SugaredChar, SugaredInt, SugaredLambda, SugaredLet, SugaredList)
+  , SugaredAST(SugaredApplication, SugaredAtom, SugaredChar,
+           SugaredInt, SugaredLambda, SugaredLet, SugaredList)
   ) where
 
 import Data.Semigroup ((<>))
