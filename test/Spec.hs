@@ -7,21 +7,21 @@ module Main
 
 import Data.Semigroup ((<>))
 
-import Minilisp (minilisp)
 import Minilisp.AST
-       (AST(Application, Atom, Char', Int', Lambda, List),
-        RawAST(RawAtom, RawChar, RawInt, RawList, RawQuotedList),
-        SugaredAST(SugaredApplication, SugaredAtom,
-                   SugaredChar, SugaredInt, SugaredLambda, SugaredLet, SugaredList))
-import Minilisp.App (AppM, evalAppM)
+       (AST(Application, Atom, Char', Int', Lambda, List, QuotedAtom),
+        RawAST(RawAtom, RawChar, RawInt, RawList, RawQuotedAtom,
+               RawQuotedList),
+        SugaredAST(SugaredApplication, SugaredAtom, SugaredChar,
+                   SugaredInt, SugaredLambda, SugaredLet, SugaredList,
+                   SugaredQuotedAtom))
+import Minilisp.App (evalAppM)
 import Minilisp.Parse
-       (atom, char', expression, int, list, quotedList, sExp,
-        string', whitespace)
+       (atom, char', expression, identifier, int, list, quotedAtom,
+        quotedList, sExp, string', whitespace)
 import Minilisp.Stages (desugarAST, normalizeAST)
 import Minilisp.Terminal as Terminal (configure)
 
 import qualified Text.Parsec as Parsec (parse)
-import Text.Parsec.Char (alphaNum)
 import Text.Parsec.Combinator (eof)
 
 main :: IO ()
@@ -45,9 +45,6 @@ tests = do
         (whitespace, "") <== ""
         (whitespace, " \t\n\r") <== " \t\n\r"
     describe "Grammar" $ do
-      it "sExp" $
-        (sExp, "( a b c d )") <==
-        [RawAtom "a", RawAtom "b", RawAtom "c", RawAtom "d"]
       it "atom" $ (atom, "a!1") <== RawAtom "a!1"
       it "char'" $ (char', "'a'") <== RawChar 'a'
       it "expression" $ do
@@ -56,22 +53,31 @@ tests = do
         (expression, "123") <== RawInt 123
         (expression, "( a b c d )") <==
           RawList [RawAtom "a", RawAtom "b", RawAtom "c", RawAtom "d"]
-        (expression, "'( a b c d )") <==
+        (expression, "`a!1") <== RawQuotedAtom "a!1"
+        (expression, "`( a b c d )") <==
           RawQuotedList [RawAtom "a", RawAtom "b", RawAtom "c", RawAtom "d"]
         (expression, "\"asdf\"") <==
           RawQuotedList [RawChar 'a', RawChar 's', RawChar 'd', RawChar 'f']
+      it "identifier" $ (identifier, "a!1") <== "a!1"
       it "int" $ (int, "123") <== RawInt 123
+      it "list" $
+        (list, "( a b c d )") <==
+        RawList [RawAtom "a", RawAtom "b", RawAtom "c", RawAtom "d"]
+      it "quotedAtom" $ (quotedAtom, "`a!1") <== RawQuotedAtom "a!1"
       it "quotedList" $ do
-        (quotedList, "'()") <== RawQuotedList []
-        (quotedList, "'( a b c d )") <==
+        (quotedList, "`()") <== RawQuotedList []
+        (quotedList, "`( a b c d )") <==
           RawQuotedList [RawAtom "a", RawAtom "b", RawAtom "c", RawAtom "d"]
+      it "sExp" $
+        (sExp, "( a b c d )") <==
+        [RawAtom "a", RawAtom "b", RawAtom "c", RawAtom "d"]
       it "string'" $ do
         (string', "\"\"") <== RawQuotedList []
         (string', "\"asdf\"") <==
           RawQuotedList [RawChar 'a', RawChar 's', RawChar 'd', RawChar 'f']
   describe "Stages" $ do
     let a <==> b =
-          case map fst $ [evalAppM a, evalAppM b] of
+          case map fst [evalAppM a, evalAppM b] of
             [Right aValue, Right bValue] ->
               putStrLn $
               if aValue == bValue
@@ -79,8 +85,8 @@ tests = do
                 else "ERROR: " <> show aValue <> " /= " <> show bValue
             [Left err, _] -> putStrLn $ "ERROR: " <> show err
             [_, Left err] -> putStrLn $ "ERROR: " <> show err
+            _ -> error "ERROR: this is not possible"
     let a <== b = a <==> return b
-    let a ==> b = return a <==> b
     describe "normalizeAST" $ do
       it "correctly normalizes atoms" $
         normalizeAST (RawAtom "a") <== SugaredAtom "a"
@@ -114,6 +120,8 @@ tests = do
         in normalizeAST (RawList (fn : args)) <==>
            (SugaredApplication <$> normalizeAST fn <*>
             traverse normalizeAST args)
+      it "correctly normalizes quoted atoms" $
+        normalizeAST (RawQuotedAtom "a") <== SugaredQuotedAtom "a"
       it "correctly normalizes quoted lists" $
         let rawItems = [RawAtom "a", RawAtom "b"]
         in normalizeAST (RawQuotedList rawItems) <==>
@@ -145,6 +153,8 @@ tests = do
         let items = [SugaredAtom "a", SugaredAtom "b"]
         in desugarAST (SugaredList items) <==>
            (List <$> traverse desugarAST items)
+      it "correctly desugars quoted atoms" $
+        desugarAST (SugaredQuotedAtom "a") <== QuotedAtom "a"
   where
     describe name = (putStrLn ("====== " <> name <> " ======") >>)
     it name = (putStrLn name >>)

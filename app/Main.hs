@@ -2,8 +2,6 @@ module Main
   ( main
   ) where
 
-import Control.Monad (forever)
-
 import Minilisp.Logging (Verbosity(Quiet))
 import Minilisp.Repl
        (Configuration(Configuration, _verbosity), repl)

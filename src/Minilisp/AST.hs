@@ -1,11 +1,13 @@
 {-# LANGUAGE InstanceSigs #-}
 
 module Minilisp.AST
-  ( AST(Application, Atom, Char', Int', Lambda, List)
+  ( AST(Application, Atom, Char', Int', Lambda, List, QuotedAtom)
   , Atom
-  , RawAST(RawAtom, RawChar, RawInt, RawList, RawQuotedList)
+  , RawAST(RawAtom, RawChar, RawInt, RawList, RawQuotedAtom,
+       RawQuotedList)
   , SugaredAST(SugaredApplication, SugaredAtom, SugaredChar,
-           SugaredInt, SugaredLambda, SugaredLet, SugaredList)
+           SugaredInt, SugaredLambda, SugaredLet, SugaredList,
+           SugaredQuotedAtom)
   ) where
 
 import Data.Semigroup ((<>))
@@ -17,6 +19,7 @@ data RawAST
   | RawChar Char
   | RawInt Int
   | RawList [RawAST]
+  | RawQuotedAtom Atom
   | RawQuotedList [RawAST]
   deriving (Eq)
 
@@ -26,10 +29,11 @@ instance Show RawAST where
   show (RawChar char) = "'" <> [char] <> "'"
   show (RawInt int) = show int
   show (RawList expressions) = "(" <> unwords (map show expressions) <> ")"
+  show (RawQuotedAtom atom) = '`' : atom
   show (RawQuotedList expressions) =
     case traverse extractChar expressions of
       Just string -> "\"" <> string <> "\""
-      Nothing -> "'(" <> unwords (map show expressions) <> ")"
+      Nothing -> "`(" <> unwords (map show expressions) <> ")"
     where
       extractChar (RawChar char) = Just char
       extractChar _ = Nothing
@@ -45,6 +49,7 @@ data SugaredAST
   | SugaredLet [(Atom, SugaredAST)]
                SugaredAST
   | SugaredList [SugaredAST]
+  | SugaredQuotedAtom Atom
   deriving (Eq)
 
 instance Show SugaredAST where
@@ -62,10 +67,11 @@ instance Show SugaredAST where
   show (SugaredList expressions) =
     case traverse extractChar expressions of
       Just string -> "\"" <> string <> "\""
-      Nothing -> "'(" <> unwords (map show expressions) <> ")"
+      Nothing -> "`(" <> unwords (map show expressions) <> ")"
     where
       extractChar (SugaredChar char) = Just char
       extractChar _ = Nothing
+  show (SugaredQuotedAtom atom) = '`' : atom
 
 data AST
   = Application AST
@@ -76,6 +82,7 @@ data AST
   | Lambda Atom
            AST
   | List [AST]
+  | QuotedAtom Atom
   deriving (Eq)
 
 instance Show AST where
@@ -88,7 +95,8 @@ instance Show AST where
   show (List expressions) =
     case traverse extractChar expressions of
       Just string -> "\"" <> string <> "\""
-      Nothing -> "'(" <> unwords (map show expressions) <> ")"
+      Nothing -> "`(" <> unwords (map show expressions) <> ")"
     where
       extractChar (Char' char) = Just char
       extractChar _ = Nothing
+  show (QuotedAtom atom) = '`' : atom

@@ -10,17 +10,16 @@ module Minilisp.Primitives
 
 import Control.Monad (replicateM)
 import Control.Monad.Except (MonadError, throwError)
-import Control.Monad.State (MonadState)
+import Control.Monad.State (evalStateT, StateT)
 import Data.List (find, intercalate)
 import Data.Semigroup ((<>))
 
 import Minilisp.AST
-       (AST(Atom, Int', List), Atom,
+       (AST(Application, Atom, Int', Lambda, List, QuotedAtom), Atom,
         SugaredAST(SugaredApplication, SugaredAtom, SugaredLambda,
                    SugaredLet))
 import Minilisp.Error (Error(Error), Type(InvalidArguments))
-import Minilisp.Mangle (mkAtom, mkRestricted)
-import Minilisp.State (HasState)
+import Minilisp.Mangle (initialMangler, mkAtom, mkRestricted)
 
 type Arity = Int
 
@@ -43,8 +42,8 @@ primitives =
              case args of
                [a, b] ->
                  if a == b
-                   then return $ Atom "true"
-                   else return $ Atom "false"
+                   then return $ QuotedAtom "true"
+                   else return $ QuotedAtom "false"
                _ ->
                  throwError $
                  Error
@@ -53,14 +52,49 @@ primitives =
                       "two values"
                       (intercalate ", " $ map show args))
                    Nothing)
+      , Primitive
+          ">"
+          2
+          (\args ->
+             case args of
+               [Int' a, Int' b] ->
+                 return $
+                 QuotedAtom $
+                 if a > b
+                   then "true"
+                   else "false"
+               _ ->
+                 throwError $
+                 Error
+                   (InvalidArguments
+                      ">"
+                      "two ints"
+                      (intercalate ", " $ map show args))
+                   Nothing)
       ]
     controlPrimitives =
       [ Primitive
+          "fix"
+          1
+          (\args ->
+             case args of
+               [f@(Lambda _ _)] ->
+                 return $
+                 Application f [Application (Atom (mkRestricted "fix")) [f]]
+               _ ->
+                 throwError $
+                 Error
+                   (InvalidArguments
+                      "fix"
+                      "a function"
+                      (intercalate ", " $ map show args))
+                   Nothing)
+      , Primitive
           "if"
           3
           (\args ->
              case args of
-               [Atom cond, true, false] ->
+               [QuotedAtom cond, true, false] ->
                  case cond of
                    "false" -> return false
                    "true" -> return true
@@ -163,8 +197,8 @@ findPrimitive name =
   find (\(Primitive name' _ _) -> name == mkRestricted name') primitives
 
 curryPrimitive
-  :: (HasState s, MonadError Error m, MonadState s m)
-  => Primitive m -> m SugaredAST
+  :: Monad m
+  => Primitive m -> StateT String m SugaredAST
 curryPrimitive (Primitive name arity _) = do
   atoms <- replicateM arity mkAtom
   return $
@@ -175,9 +209,10 @@ curryPrimitive (Primitive name arity _) = do
          (map SugaredAtom atoms))
 
 wrapWithCurriedPrimitives
-  :: (HasState s, MonadError Error m, MonadState s m)
+  :: MonadError Error m
   => SugaredAST -> m SugaredAST
 wrapWithCurriedPrimitives ast =
+  flip evalStateT initialMangler $
   SugaredLet <$>
   traverse
     (\primitive@(Primitive name _ _) -> (name, ) <$> curryPrimitive primitive)

@@ -22,7 +22,6 @@ library:
   - Minilisp.Primitives
   - Minilisp.Repl
   - Minilisp.Stages
-  - Minilisp.State
   - Minilisp.Stdlib
   - Minilisp.Terminal
   dependencies:
@@ -30,6 +29,9 @@ library:
   - lens
   - mtl
   - parsec
+  ghc-options:
+  - -Wall
+  - -Werror
 executables:
   minilisp-exe:
     main: Main.hs
@@ -38,6 +40,8 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -Wall
+    - -Werror
     dependencies:
     - base
     - minilisp
@@ -49,6 +53,8 @@ tests:
     ghc-options:
     - -threaded
     - -rtsopts
+    - -Wall
+    - -Werror
     - -with-rtsopts=-N
     dependencies:
     - base

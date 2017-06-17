@@ -4,10 +4,9 @@ module Minilisp.Error
   ( Context
   , Error(Error)
   , Type(EmptyList, FunctionNotFound, InvalidArguments,
-     InvalidApplication, InvalidSyntax)
+     InvalidApplication, InvalidIOAction, InvalidSyntax)
   ) where
 
-import Data.List (intercalate)
 import Data.Semigroup ((<>))
 
 import Minilisp.AST (AST, Atom)
@@ -20,8 +19,8 @@ data Type
   | InvalidArguments Atom
                      String
                      String
-  | InvalidApplication String
-  | InvalidLambda
+  | InvalidApplication AST
+  | InvalidIOAction AST
   | InvalidSyntax String
 
 data Error =
@@ -46,6 +45,8 @@ instance Show Type where
   show (InvalidApplication nonFn) =
     mkError $
     show nonFn <> " is not a function and so cannot be applied to arguments"
+  show (InvalidIOAction nonAction) =
+    mkError $ show nonAction <> " is not an IO action"
   show (InvalidSyntax msg) = mkError msg
 
 mkError :: String -> String

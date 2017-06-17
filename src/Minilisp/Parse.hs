@@ -5,11 +5,13 @@ module Minilisp.Parse
   ( atom
   , char'
   , expression
+  , identifier
   , int
   , list
   , many
   , parse
   , program
+  , quotedAtom
   , quotedList
   , sExp
   , string'
@@ -18,16 +20,15 @@ module Minilisp.Parse
 
 import Control.Monad.Except (MonadError, throwError)
 
-import Data.Semigroup ((<>))
-
 import Minilisp.AST
-       (RawAST(RawAtom, RawChar, RawInt, RawList, RawQuotedList))
+       (RawAST(RawAtom, RawChar, RawInt, RawList, RawQuotedAtom,
+               RawQuotedList))
 import Minilisp.Error (Error(Error), Type(InvalidSyntax))
 
-import Text.Parsec ((<|>), eof, Stream, ParseError, ParsecT, try)
+import Text.Parsec ((<|>), eof, Stream, ParsecT, try)
 import qualified Text.Parsec as Parsec (parse)
 import Text.Parsec.Char
-       (alphaNum, char, digit, letter, noneOf, oneOf, space, string)
+       (alphaNum, char, digit, letter, noneOf, oneOf, space)
 import Text.Parsec.Combinator (many1)
 import Text.Parsec.Prim (many)
 
@@ -46,9 +47,7 @@ sExp = char '(' *> many item <* whitespace <* char ')'
 atom
   :: Stream s m Char
   => ParsecT s u m RawAST
-atom = RawAtom <$> ((:) <$> (letter <|> symbol) <*> many (alphaNum <|> symbol))
-  where
-    symbol = oneOf "`!@#$%^&*-=~_+,./<>?"
+atom = RawAtom <$> identifier
 
 char'
   :: Stream s m Char
@@ -59,7 +58,14 @@ expression
   :: Stream s m Char
   => ParsecT s u m RawAST
 expression =
-  try atom <|> try char' <|> int <|> list <|> try quotedList <|> string'
+  atom <|> char' <|> int <|> list <|> try quotedAtom <|> quotedList <|> string'
+
+identifier
+  :: Stream s m Char
+  => ParsecT s u m String
+identifier = (:) <$> (letter <|> symbol) <*> many (alphaNum <|> symbol)
+  where
+    symbol = oneOf "!@#$%^&*-=~_+,./<>?\\|"
 
 int
   :: Stream s m Char
@@ -71,10 +77,15 @@ list
   => ParsecT s u m RawAST
 list = RawList <$> sExp
 
+quotedAtom
+  :: Stream s m Char
+  => ParsecT s u m RawAST
+quotedAtom = RawQuotedAtom <$> (char '`' *> identifier)
+
 quotedList
   :: Stream s m Char
   => ParsecT s u m RawAST
-quotedList = RawQuotedList <$> (char '\'' *> sExp)
+quotedList = RawQuotedList <$> (char '`' *> sExp)
 
 string'
   :: Stream s m Char

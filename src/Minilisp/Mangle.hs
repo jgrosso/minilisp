@@ -1,25 +1,27 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 module Minilisp.Mangle
   ( initialMangler
   , mkAtom
   , mkRestricted
   ) where
 
-import Control.Lens ((<<%=))
-import Control.Monad.State (MonadState)
+import Control.Monad.State (get, modify, MonadState)
 
 import Data.Char (chr, ord)
 import Data.Semigroup ((<>))
 
 import Minilisp.AST (Atom)
-import Minilisp.State (HasState, parameterName)
 
 initialMangler :: Atom
 initialMangler = "a"
 
 mkAtom
-  :: (HasState s, MonadState s m)
+  :: MonadState String m
   => m String
-mkAtom = (mkRestricted . ("_" <>)) <$> (parameterName <<%= fmap incrementChar)
+mkAtom = do
+  modify $ map incrementChar
+  mkRestricted . ("_" <>) <$> get
   where
     incrementChar = chr . (+ 1) . ord
 

@@ -18,9 +18,14 @@ stdlib
 stdlib = mapM (\(name, body) -> (name, ) <$> (parse body >>= normalizeAST)) defs
   where
     defs =
-      [ ("!", "(lambda (x) (if x false true))")
-      , ("&&", "(lambda (a b) (if a (if b true false) false))")
-      , ("||", "(lambda (a b) (if a true (if b true false)))")
+      [ ("<=", "(lambda (a b) (|| (< a b) (= a b)))")
+      , ("<", "(lambda (a b) (! (|| (= a b) (> a b))))")
+      , ("!", "(lambda (x) (if x `false `true))")
+      , ("&&", "(lambda (a b) (if a (if b `true `false) `false))")
+      , ("||", "(lambda (a b) (if a `true (if b `true `false)))")
+      , ("io/exit", "`(`io/exit)")
+      , ("io/print", "(lambda (x) `(`io/print x))")
+      , ("io/seq", "(lambda (x next) (<> x `(next)))")
       ]
 
 wrapWithStdlib

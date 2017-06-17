@@ -10,7 +10,8 @@ import Control.Monad (forever)
 
 import Minilisp (minilisp)
 import Minilisp.App (evalAppM)
-import Minilisp.Logging (showLog, Verbosity(Verbose))
+import Minilisp.Eval (runIO)
+import Minilisp.Logging (showLog, Verbosity)
 
 newtype Configuration = Configuration
   { _verbosity :: Verbosity
@@ -26,6 +27,6 @@ repl config =
     putStr "> "
     input <- getLine
     case evalAppM (minilisp input) of
-      (result, log) -> do
-        either print print result
-        putStrLn $ showLog (config ^. verbosity) log
+      (result, log') -> do
+        either print runIO result
+        putStrLn $ showLog (config ^. verbosity) log'

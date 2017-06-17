@@ -8,7 +8,7 @@ module Minilisp.Logging
   , Verbosity(Quiet, Verbose)
   ) where
 
-import Control.Monad.Writer (MonadWriter, tell, WriterT)
+import Control.Monad.Writer (MonadWriter, tell)
 
 import Data.List (intercalate)
 import Data.Maybe (mapMaybe)

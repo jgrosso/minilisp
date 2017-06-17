@@ -3,82 +3,92 @@
 
 module Minilisp.Eval
   ( eval
+  , runIO
   ) where
 
 import Control.Monad.Except (MonadError, throwError)
-import Control.Monad.State (MonadState)
-
-import Data.Semigroup ((<>))
 
 import Debug.Trace (traceShowId)
 
 import Minilisp.AST
-       (AST(Application, Atom, Char', Lambda, List), Atom)
+       (AST(Application, Atom, Lambda, List, QuotedAtom), Atom)
 import Minilisp.Error
-       (Error(Error),
-        Type(FunctionNotFound, InvalidArguments, InvalidApplication))
-import Minilisp.Mangle (mkAtom)
+       (Error(Error), Type(FunctionNotFound, InvalidIOAction))
 import Minilisp.Primitives (findPrimitive, Primitive(Primitive))
-import Minilisp.State (State)
 
-substitute :: Atom -> AST -> AST -> AST
-substitute target value expression =
+exhaustM
+  :: (Eq a, Monad m)
+  => (a -> m a) -> a -> m a
+exhaustM f x = do
+  result <- f x
+  if x == result
+    then return result
+    else exhaustM f result
+
+recursivelyRewrite :: (AST -> AST) -> AST -> AST
+recursivelyRewrite f expression =
+  f $
   case expression of
-    Application fn body -> Application (substitute' fn) (map substitute' body)
-    Atom atom ->
-      if atom == target
-        then value
-        else expression
-    Lambda param body -> Lambda param (substitute' body)
-    List expressions -> List (map substitute' expressions)
+    Application fn args ->
+      Application (recursivelyRewrite' fn) (map recursivelyRewrite' args)
+    Lambda param body -> Lambda param (recursivelyRewrite' body)
+    List expressions -> List (map recursivelyRewrite' expressions)
     _ -> expression
   where
-    substitute' = substitute target value
+    recursivelyRewrite' = recursivelyRewrite f
 
-inline :: AST -> AST
-inline (Application fn args) =
-  case fn of
-    Lambda param body ->
-      let result = inline $ substitute param arg body
-      in case restArgs of
-           [] -> result
-           _ -> inline $ Application result restArgs
-    _ -> inline $ Application (inline fn) (map inline args)
-  where arg:restArgs = map inline args'
-inline (List expressions) = List (map inline expressions)
-inline expression = expression
+recursivelyEval
+  :: Monad m
+  => (AST -> m AST) -> AST -> m AST
+recursivelyEval f expression =
+  f =<<
+  case expression of
+    Application fn args ->
+      Application <$> recursivelyEval' fn <*> traverse recursivelyEval' args
+    List expressions -> List <$> traverse recursivelyEval' expressions
+    _ -> return expression
+  where
+    recursivelyEval' = recursivelyEval f
 
-eval' :: MonadError Error m => AST -> m AST
-eval' expression@(Application (Atom primitive) args) =
-  case findPrimitive primitive of
-    Just (Primitive _ _ body) -> eval' $ body args
-    _ -> throwError $ Error (FunctionNotFound atom) (Just $ show expressions)
-eval' expression = expression
+substitute :: Atom -> AST -> AST -> AST
+substitute target value expression@(Atom atom) =
+  if atom == target
+    then value
+    else expression
+substitute _ _ expression = expression
 
-eval'
-  :: (MonadError Error m, MonadState State m)
+evalLambda :: AST -> AST
+evalLambda (Application (Lambda param body) (arg:restArgs)) =
+  let result = traceShowId $ recursivelyRewrite (substitute param arg) body
+  in case restArgs of
+       [] -> result
+       _ -> Application result restArgs
+evalLambda expression = expression
+
+evalPrimitive
+  :: MonadError Error m
   => AST -> m AST
-eval' expression@(Application fn' args') = do
-  fn <- eval fn'
-  args <- traverse eval args'
-  result <-
-    case fn of
-      Lambda param body ->
-        case args of
-          arg:restArgs ->
-            case restArgs of
-              [] -> eval body
-              _ -> eval (Application body restArgs)
-      Atom atom ->
-        case findPrimitive atom of
-          Just (Primitive _ _ body) -> body args
-          _ ->
-            throwError $ Error (FunctionNotFound atom) (Just $ show expression)
-  eval result
-eval' (List expressions) = List <$> traverse eval expressions
-eval' expression = return $ inline expression
+evalPrimitive expression@(Application (Atom primitive) args) =
+  case findPrimitive primitive of
+    Just (Primitive _ _ body) -> body args
+    _ ->
+      throwError $ Error (FunctionNotFound primitive) (Just $ show expression)
+evalPrimitive expression = return expression
 
 eval
-  :: (MonadError Error m, MonadState State m)
+  :: MonadError Error m
   => AST -> m AST
-eval = eval' . traceShowId . inline
+eval = exhaustM $ recursivelyEval evalPrimitive . recursivelyRewrite evalLambda
+
+runIO :: AST -> IO ()
+runIO expression@(List (action:args)) =
+  case action of
+    QuotedAtom "io/exit" -> return ()
+    QuotedAtom "io/print" ->
+      case args of
+        [x, next] -> do
+          print x
+          runIO next
+        _ -> print $ InvalidIOAction expression
+    _ -> print $ InvalidIOAction expression
+runIO expression = print $ InvalidIOAction expression
